@@ -3,3 +3,9 @@
 venv/
 __pycache__/
 *.py[cod]
+lab3/output/
+lab6/output/
+/lab6/private.pem
+/lab6/public.pem
+/lab5/original.pdf
+/lab5/received.pdf

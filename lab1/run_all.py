@@ -5,6 +5,10 @@ import subprocess
 import sys
 
 
+
+# ---------- RUN ALL REGULAR EXERCISES ----------
+# Run each question with blank inputs to select its displayed defaults.
+# Use sys.executable so every child program uses this same Python environment.
 def main():
     folder = Path(__file__).resolve().parent
     for script in sorted(folder.glob('q*.py')):

@@ -33,37 +33,69 @@ e1 f8 98 11 69 d9 8e 94 9b 1e 87 e9 ce 55 28 df
 """)
 
 
+
+# ---------- VALIDATE KEY ----------
+# Reject a key with the wrong size or invalid algorithm-specific structure.
+# Message padding never fixes a key-size error.
 def validate_key(key):
     if len(key) != 24:
         raise ValueError("AES-192 needs exactly 24 key bytes (48 hex digits).")
 
 
-def encrypt(message, key):
+
+# ---------- ENCRYPT AES192 ----------
+# Use the short library AES-192 implementation with a 24-byte key.
+# Use this short function for exam composition; the trace helpers are for Q5 steps.
+def encrypt_aes192(message, key):
     """Short library implementation for reuse in a blended exam question."""
     validate_key(key)
+
+    # Create a fresh cipher object with the mode, key, and IV/nonce needed here.
     cipher = AES.new(key, AES.MODE_ECB)
-    return cipher.encrypt(pad(message, AES.block_size))
+    padded_message = pad(message, AES.block_size)
+    ciphertext = cipher.encrypt(padded_message)
+
+    return ciphertext
 
 
-def decrypt(ciphertext, key):
+
+# ---------- DECRYPT AES192 ----------
+# Decrypt AES-192 ECB and remove message padding using the same 24-byte key.
+# The manual key needs the explicit correction explained in main().
+def decrypt_aes192(ciphertext, key):
     validate_key(key)
+
+    # Create a fresh cipher object with the mode, key, and IV/nonce needed here.
     cipher = AES.new(key, AES.MODE_ECB)
-    return unpad(cipher.decrypt(ciphertext), AES.block_size)
+    padded_message = cipher.decrypt(ciphertext)
+    plaintext = unpad(padded_message, AES.block_size)
+
+    return plaintext
 
 
+
+# ---------- XTIME ----------
+# Multiply a byte by 2 in the AES finite field, reducing with polynomial 0x11B.
+# This is NOT ordinary integer multiplication modulo 256.
 def xtime(value):
     """Multiply by 2 in AES's byte field, reducing with polynomial 0x11B."""
     if value & 0x80:
         return ((value << 1) ^ 0x1B) & 0xFF
+
     return (value << 1) & 0xFF
 
 
+
+# ---------- EXPAND KEY ----------
+# Expand six initial AES-192 words into 52 words, grouped into 13 round keys.
+# Every sixth word uses RotWord, SubWord and Rcon before the XOR.
 def expand_key(key, trace=False):
     """AES-192: 6 initial 4-byte words -> 52 words -> 13 round keys."""
     validate_key(key)
     words = []
     for i in range(0, 24, 4):
         words.append(list(key[i:i + 4]))
+
     if trace:
         print("\nKEY EXPANSION: Nk=6 words, Nr=12 rounds, 52 words total")
         for i in range(6):
@@ -76,17 +108,21 @@ def expand_key(key, trace=False):
             temp = temp[1:] + temp[:1]  # RotWord: rotate left by one byte.
             if trace:
                 print("  RotWord:", bytes(temp).hex())
+
             for j in range(4):
                 temp[j] = SBOX[temp[j]]  # SubWord: substitute each byte.
+
             if trace:
                 print("  SubWord:", bytes(temp).hex())
                 print("  Rcon: {:02x}000000".format(rcon))
+
             temp[0] ^= rcon
             rcon = xtime(rcon)
 
         word = []
         for j in range(4):
             word.append(words[i - 6][j] ^ temp[j])
+
         words.append(word)
         if trace:
             print("w[{:02}] = {} XOR {} = {}".format(
@@ -97,37 +133,59 @@ def expand_key(key, trace=False):
         round_key = []
         for word in words[round_number * 4:round_number * 4 + 4]:
             round_key.extend(word)
+
         round_keys.append(round_key)
+
     if trace:
         print("\nROUND KEYS (each 16 bytes, even though the original key is 24 bytes)")
         for i, round_key in enumerate(round_keys):
             print("K[{:02}] = {}".format(i, bytes(round_key).hex()))
+
     return round_keys
 
 
+
+# ---------- ADD ROUND KEY ----------
+# XOR each state byte with its matching round-key byte.
+# XOR is its own inverse, but the complete AES decryption has other inverse steps.
 def add_round_key(state, round_key):
     result = []
     for i in range(16):
         result.append(state[i] ^ round_key[i])
+
     return result
 
 
+
+# ---------- SUB BYTES ----------
+# Look up every state byte in the fixed nonlinear AES S-box.
+# This function only substitutes bytes; it does not shift or mix them.
 def sub_bytes(state):
     result = []
     for value in state:
         result.append(SBOX[value])
+
     return result
 
 
+
+# ---------- SHIFT ROWS ----------
+# Shift state row r left by r positions, using column-major storage.
+# Mixing row-major and column-major layouts is a common implementation mistake.
 def shift_rows(state):
     result = [0] * 16
     for row in range(4):
         for column in range(4):
             # Each row shifts left by its row number.
             result[4 * column + row] = state[4 * ((column + row) % 4) + row]
+
     return result
 
 
+
+# ---------- MIX COLUMNS ----------
+# Mix each 4-byte column with AES field arithmetic to spread changes.
+# The final AES round deliberately skips this function.
 def mix_columns(state):
     result = []
     for i in range(0, 16, 4):
@@ -138,44 +196,66 @@ def mix_columns(state):
         result.append(b ^ total ^ xtime(b ^ c))
         result.append(c ^ total ^ xtime(c ^ d))
         result.append(d ^ total ^ xtime(d ^ a))
+
     return result
 
 
+
+# ---------- SHOW STATE ----------
+# Display the current AES state as column-major hexadecimal bytes.
 def show_state(label, state):
     print("  {:<18} {}".format(label, bytes(state).hex()))
 
 
+
+# ---------- ENCRYPT BLOCK ----------
+# Encrypt exactly one block through initial, main and final AES-192 rounds.
+# No padding here: the higher-level function prepares complete message blocks.
 def encrypt_block(block, round_keys, trace=False):
     """Encrypt exactly one 16-byte block without padding, using expanded keys."""
     if len(block) != 16 or len(round_keys) != 13:
         raise ValueError("Need a 16-byte block and 13 AES-192 round keys.")
+
     state = list(block)
     if trace:
         print("Initial round")
         show_state("Input", state)
+
     state = add_round_key(state, round_keys[0])
     if trace:
         show_state("AddRoundKey", state)
 
     for round_number in range(1, 13):
         if trace:
-            print("Round", round_number, "(final; no MixColumns)" if round_number == 12 else "")
+            if round_number == 12:
+                print("Round", round_number, "(final; no MixColumns)")
+            else:
+                print("Round", round_number)
+
         state = sub_bytes(state)
         if trace:
             show_state("SubBytes", state)
+
         state = shift_rows(state)
         if trace:
             show_state("ShiftRows", state)
+
         if round_number != 12:
             state = mix_columns(state)
             if trace:
                 show_state("MixColumns", state)
+
         state = add_round_key(state, round_keys[round_number])
         if trace:
             show_state("AddRoundKey", state)
+
     return bytes(state)
 
 
+
+# ---------- ENCRYPT WITH STEPS ----------
+# Pad the message and display real round keys and intermediate states per block.
+# The output must match the library encryption; names alone are not a round trace.
 def encrypt_with_steps(message, key):
     """Trace actual encryption values, then return the complete ECB ciphertext."""
     round_keys = expand_key(key, trace=True)
@@ -186,23 +266,49 @@ def encrypt_with_steps(message, key):
     for i in range(0, len(padded), 16):
         print("\nBLOCK", i // 16 + 1)
         ciphertext += encrypt_block(padded[i:i + 16], round_keys, trace=True)
+
     return ciphertext
 
 
+
+# ---------- INPUTS, DEMONSTRATION, AND OUTPUT ----------
+# Read the scenario inputs, call the reusable functions, then display results.
+# CHANGE the message/key inputs to adapt this example. Importing this file does not run main().
 def main():
     print("Manual key HEX:", MANUAL_KEY_HEX)
     print("That is 16 bytes as hex, or 32 as text; neither is an AES-192 key.")
     print("Demonstration correction: append FEDCBA9876543210 -> 24 bytes.")
-    message = input("Plaintext [Enter = Top Secret Data]: ") or "Top Secret Data"
-    key_hex = input("24-byte key HEX [Enter = " + DEMO_KEY_HEX + "]: ") or DEMO_KEY_HEX
+    message = input('Plaintext [Enter = Top Secret Data]: ')
+
+    if message == "":
+        message = 'Top Secret Data'
+
+    key_hex = input('24-byte key HEX [Enter = ' + DEMO_KEY_HEX + ']: ')
+
+    if key_hex == "":
+        key_hex = DEMO_KEY_HEX
+
     key = bytes.fromhex(key_hex)
     data = message.encode("utf-8")
+
+    # Sender step: protect the ORIGINAL input and keep the returned result.
     ciphertext = encrypt_with_steps(data, key)
-    if ciphertext != encrypt(data, key):
+    if ciphertext != encrypt_aes192(data, key):
         raise ValueError("Educational AES trace does not match PyCryptodome.")
+
     print("\nCiphertext HEX:", ciphertext.hex())
     print("Verified: actual round trace matches PyCryptodome AES-192.")
-    print("Decrypted text:", decrypt(ciphertext, key).decode("utf-8"))
+    print("Decrypted text:", decrypt_aes192(ciphertext, key).decode("utf-8"))
+
+
+
+
+# ---------- COMPATIBILITY NAMES ----------
+# Existing examples can keep their short calls; the descriptive functions above
+# are the actual implementations to read or copy. No extra computation happens here.
+encrypt = encrypt_aes192
+decrypt = decrypt_aes192
+
 
 
 if __name__ == "__main__":
