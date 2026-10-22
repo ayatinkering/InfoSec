@@ -7,7 +7,7 @@ is educational, not a claim to implement an approved production protocol.
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pss
 from Crypto.Hash import SHA256
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Protocol.KDF import HKDF
 from Crypto.Random import get_random_bytes
 from Crypto.Util.number import getStrongPrime
@@ -135,6 +135,21 @@ def encrypt_message(message, key):
 
 
 
+# ---------- RSA ENCRYPTION FOR SESSION-KEY DISTRIBUTION ----------
+# The regular question asks for RSA encryption as well as DH key agreement.
+# Encrypt only the 32-byte session key, not an arbitrarily large document.
+def wrap_session_key(session_key, receiver_public_key):
+    cipher = PKCS1_OAEP.new(receiver_public_key, SHA256)
+    return cipher.encrypt(session_key)
+
+
+
+def unwrap_session_key(wrapped_key, receiver_private_key):
+    cipher = PKCS1_OAEP.new(receiver_private_key, SHA256)
+    return cipher.decrypt(wrapped_key)
+
+
+
 # ---------- DECRYPT AND VERIFY ONE MESSAGE ----------
 # Changed data must fail tag verification before plaintext is returned.
 def decrypt_message(packet, key):
@@ -174,10 +189,17 @@ def main():
 
     p = getStrongPrime(1024)
     alice_key, bob_key = exchange_session_keys(systems, sender, receiver, p, 2)
+    wrapped_key = wrap_session_key(alice_key, systems[receiver]['public'])
+    delivered_key = unwrap_session_key(wrapped_key, systems[receiver]['private'])
+
+    if delivered_key != bob_key:
+        raise ValueError('RSA-delivered key does not match the DH-derived key.')
+
     packet = encrypt_message(text.encode("utf-8"), alice_key)
-    recovered = decrypt_message(packet, bob_key)
+    recovered = decrypt_message(packet, delivered_key)
 
     print(sender, "->", receiver)
+    print('RSA-encrypted session key:', wrapped_key.hex())
     print("Ciphertext HEX:", packet[2].hex())
     print("Received:", recovered.decode("utf-8"))
 

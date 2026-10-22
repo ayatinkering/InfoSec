@@ -9,11 +9,12 @@ examples. The same files also work in VS Code.
 - [Lab 1: all six regular exercises](lab1/README.md) — Python 3.8+, standard library only.
 - [Lab 2: all five regular exercises](lab2/README.md) — Python 3.9+, PyCryptodome.
 - [Lab 3: all five regular exercises](lab3/README.md) — RSA, ECC, ElGamal, file transfer, and Diffie–Hellman; Python 3.9+, PyCryptodome.
-- Lab 4: `lab4/` — existing SecureCorp key management example.
+- Lab 4: `lab4/` — SecureCorp RSA/DH and Rabin key management (both regular questions).
 - Lab 5: `lab5/` — hashing, integrity checks, sockets, and file hashes.
 - Lab 6: `lab6/` — signatures, verification, DH/HMAC, and signature sockets.
 - Lab 7: `lab7/` — homomorphic encryption and encrypted data sharing.
 - Lab 8: `lab88/` — searchable encryption (existing folder name retained).
+- [PYQ1: menu-driven e-voting](PYQ1/README.md) — RBAC and same-directory `.txt` storage.
 
 Run every Lab 1 exercise from this folder:
 

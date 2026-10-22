@@ -37,14 +37,14 @@ imports keep working while the implementation has a clearer name.
 | 1 | `lab1/` | Named classical cipher functions, normalization, inverses, attacks |
 | 2 | `lab2/` | Individual DES/AES modes; comments on keys, IVs, nonces, padding and tags |
 | 3 | `lab3/` | RSA, ECC hybrid, ElGamal, file transfer and DH |
-| 4 | `lab4/` | Existing SecureCorp example: registry, authorization, signed exchange, messages |
+| 4 | `lab4/` | SecureCorp RSA/DH exchange and the regular Rabin key-management exercise |
 | 5 | `lab5/` | Hash functions, socket integrity, collisions and file comparison |
 | 6 | `lab6/` | Signing and verification functions; DH/HMAC; signature sockets |
 | 7 | `lab7/` | Paillier addition, raw RSA multiplication, shared encrypted counts |
 | 8 | `lab88/` | Your existing Lab 8 folder: HMAC search tokens and encrypted posting lists |
 
-Existing filenames and the `lab88/` folder name have been kept. This update
-refactors the code already present; it does not add missing manual exercises.
+Existing filenames and the `lab88/` folder name have been kept. The completeness
+pass adds the missing regular Lab 4 Q2 and [the PYQ1 voting example](PYQ1/README.md).
 
 ## How to test tampering correctly
 
