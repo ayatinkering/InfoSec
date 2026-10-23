@@ -1,0 +1,6 @@
+{"ballot_id": 1, "result": {"error": "Timestamp invalid", "ok": false}}
+{"ballot_id": 2, "result": {"error": "Timestamp invalid", "ok": false}}
+{"ballot_id": 3, "result": {"error": "Timestamp invalid", "ok": false}}
+{"ballot_id": 4, "result": {"error": "Timestamp invalid", "ok": false}}
+{"ballot_id": 5, "result": {"error": "Timestamp invalid", "ok": false}}
+{"ballot_id": 6, "result": {"error": "Timestamp invalid", "ok": false}}
