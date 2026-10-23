@@ -1,3 +1,47 @@
+# ============================================================================
+# EXAM SWAP GUIDE — CLIENT.PY (COMMENTED EXAMPLES; NO EXECUTION)
+# ============================================================================
+# Existing PYQ remains SHA-512 + AES-256-CBC + RSA-4096 + ElGamal + Paillier.
+# To adapt a DIFFERENT question, import the helper you need and replace the
+# matching step. Do NOT enable all alternatives simultaneously.
+#
+# HASH SWAP:
+#   from crypto_helpers import hash_bytes
+#   digest = hash_bytes(data, 'sha256')   # or 'md5', 'sha1', 'sha512'
+#
+# SYMMETRIC CIPHER SWAP (packet format includes mode and IV/nonce):
+#   from crypto_helpers import key_for, encrypt_data
+#   key = key_for('AES', 128)              # 128 / 192 / 256
+#   packet = encrypt_data(data, key, 'AES', 'GCM')
+#   key = key_for('DES')                   # DES: 8-byte key
+#   packet = encrypt_data(data, key, 'DES', 'CBC')
+#   key = key_for('3DES')                  # Triple DES
+#   packet = encrypt_data(data, key, '3DES', 'CTR')
+#   # AES modes: ECB / CBC / CTR / GCM; DES/3DES: ECB / CBC / CTR.
+#   # ECB is insecure; CBC requires separate authentication.
+#
+# DIGITAL SIGNATURE SWAP:
+#   from crypto_helpers import rsa_make_keys, rsa_sign_bytes
+#   signer_pub, signer_priv = rsa_make_keys(2048)
+#   signature_hex = rsa_sign_bytes(data, signer_priv)   # RSA-PSS/SHA512
+#   from crypto_helpers import ecc_make_keys, ecc_sign
+#   ecc_pub, ecc_priv = ecc_make_keys()
+#   signature_hex = ecc_sign(data, ecc_priv)            # ECDSA/SHA256
+#   from crypto_helpers import schnorr_make_keys, schnorr_sign
+#   schnorr_pub, schnorr_priv = schnorr_make_keys()
+#   signature = schnorr_sign(data, schnorr_pub, schnorr_priv)  # toy Schnorr
+#
+# CLASSICAL CIPHER SWAP (Lab 1; text instead of bytes):
+#   from crypto_helpers import caesar_encrypt, affine_encrypt, vigenere_encrypt
+#   encrypted_text = caesar_encrypt('HELLO', 3)
+#   encrypted_text = affine_encrypt('HELLO', 5, 8)
+#   encrypted_text = vigenere_encrypt('HELLO', 'KEY')
+#
+# HOMOMORPHIC: Paillier encrypt integers; use one_hot_vote() for candidates.
+# FILE HASH: from crypto_helpers import write_hash_txt
+#            write_hash_txt('ballots.txt', 'hashes.txt', 'sha512')
+# ============================================================================
+
 """
 CLIENT.PY - Voter's machine
 Run AFTER server.py: python client.py

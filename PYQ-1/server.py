@@ -1,3 +1,33 @@
+# ============================================================================
+# EXAM SWAP GUIDE — SERVER.PY (COMMENTED EXAMPLES; NO EXECUTION)
+# ============================================================================
+# Always reverse the CLIENT's chosen cipher with the SAME algorithm and key.
+#   from crypto_helpers import decrypt_data
+#   plaintext = decrypt_data(packet, aes_key, 'AES')   # AES ECB/CBC/CTR/GCM
+#   plaintext = decrypt_data(packet, des_key, 'DES')   # DES ECB/CBC/CTR
+#   plaintext = decrypt_data(packet, tdes_key, '3DES') # 3DES ECB/CBC/CTR
+#
+# Hash verification:
+#   from crypto_helpers import verify_hash
+#   ok = verify_hash(plaintext, received_digest, 'sha256')
+#
+# Signature verification:
+#   from crypto_helpers import rsa_verify_bytes
+#   ok = rsa_verify_bytes(data, signature_hex, signer_public)
+#   from crypto_helpers import ecc_verify
+#   ok = ecc_verify(data, signature_hex, ecc_public)
+#   from crypto_helpers import schnorr_verify
+#   ok = schnorr_verify(data, signature, schnorr_public)  # toy Schnorr
+#
+# Searchable encrypted documents:
+#   from crypto_helpers import build_search_index, search_documents
+#   index = build_search_index({1:'bank salary',2:'medical record'}, search_key)
+#   matching_ids = search_documents(index, 'salary', search_key)
+#
+# WARNING: A mode/algorithm change in the CLIENT also requires updating the
+# SERVER packet handling and signatures; uncommenting just one line is NOT enough.
+# ============================================================================
+
 """
 SERVER.PY - Election Commission
 Run FIRST: python server.py
