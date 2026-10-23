@@ -1,4 +1,70 @@
 """
+================================================================================
+INFORMATION SECURITY LAB (LABS 1–8) — UNIVERSAL CRYPTO HELPERS
+================================================================================
+READ THIS TABLE FIRST. CLIENT/SERVER IMPORT THESE FUNCTIONS.
+Install: python -m pip install pycryptodome
+
+OPERATION            CLIENT: CREATE / ENCRYPT / SIGN     SERVER: REVERSE / VERIFY
+--------------------------------------------------------------------------------
+HASH (Lab 5)         hash_bytes(data,"sha256")          verify_hash(data,digest,"sha256")
+AES 128/192/256      key_for("AES",128/192/256)          decrypt_data(packet,key,"AES")
+AES CBC/GCM/CTR/ECB  encrypt_data(data,key,"AES","GCM")  decrypt_data(packet,key,"AES")
+DES / 3DES           key_for("DES") / key_for("3DES")     decrypt_data(packet,key,"DES")
+                     encrypt_data(data,key,"DES","CBC")
+RSA encryption       rsa_make_keys(2048)                rsa_decrypt(cipher,private)
+                     rsa_encrypt(key,public)
+ElGamal encryption   lab3_elgamal_keys()                lab3_elgamal_decrypt_number(...)
+                     lab3_elgamal_encrypt_number(...)
+ECC hybrid           ecc_encrypt_demo(data)             built-in ECDH+AES demo
+Diffie-Hellman       diffie_hellman_demo()              shared key agreement demo
+Rabin                rabin_make_keys()                  rabin_decrypt_roots(...)
+                     rabin_encrypt_number(m,n)
+RSA signature        rsa_sign_bytes(data,private)       rsa_verify_bytes(data,sig,public)
+ECDSA signature      ecc_sign(data,private)             ecc_verify(data,sig,public)
+ElGamal signature    elgamal_sign(data,pub,priv)        elgamal_verify(data,sig,pub)
+Schnorr signature    schnorr_sign(data,pub,priv)        schnorr_verify(data,sig,pub)
+Paillier             paillier_encrypt(amount,pub)       paillier_add(values,pub)
+                                                        paillier_decrypt(sum,pub,priv)
+SSE keyword search   add_to_index(index,id,words,key)   search_index(index,term,key)
+File hashing         write_hash_txt("file.txt","hashes.txt","sha512")
+Socket send/receive  send_json(sock,packet)              recv_json(sock)
+Timestamp            issue_timestamp(secret)            check_timestamp(ticket,secret,deadline)
+Role permissions     allowed("officer","search")         returns True / False
+
+MOST IMPORTANT UNIVERSAL EXAMPLE:
+    from crypto_helpers import key_for, encrypt_data, decrypt_data
+    key = key_for("AES", 128)
+    packet = encrypt_data(b"HELLO", key, "AES", "GCM")
+    print(decrypt_data(packet, key, "AES"))  # b'HELLO'
+
+ALSO SUPPORTS BOTH OLDER MOCK ZIP SYNTAXES:
+    key_for(128)
+    encrypt_data(b"HELLO", key, "GCM")
+    decrypt_data(packet, key)
+
+LAB 1: caesar, multiplicative, affine, vigenere, autokey, playfair,
+       hill, transposition (encrypt/decrypt), plus lab1_* demonstrations.
+LAB 2: AES/DES/3DES ECB CBC CTR and AES GCM; lab2_compare().
+LAB 3: RSA, ElGamal, ECC/ECDH hybrid, DH, Rabin helpers.
+LAB 4: key registry, RBAC, Rabin, weak-RSA demonstrations.
+LAB 5: custom hash, MD5, SHA1, SHA256, SHA512, file hashes, sockets.
+LAB 6: RSA-PSS, ECDSA, ElGamal and educational Schnorr signatures.
+LAB 7: Paillier add / known-constant multiplication, textbook
+       RSA and ElGamal multiplicative examples.
+LAB 8: SSE index, AES-encrypted docs, educational Paillier-ID index,
+       GnuPG and Snort commands/examples.
+
+IMPORTANT: This is a classroom toolbox, NOT production cryptography.
+- DES, 3DES, ECB, toy Schnorr/ElGamal and textbook RSA are legacy/educational.
+- SSE exposes IDs/access patterns; Paillier is not a general comparison scheme.
+- Threshold Paillier, real PEKS, independent timestamp authority, ZK proofs,
+  registered voter identity, and real secure election privacy are NOT implemented.
+- Socket examples use localhost TCP, not TLS.
+- Always validate keys, signatures, and authenticated roles in real systems.
+================================================================================
+"""
+"""
 INFORMATION SECURITY LAB - EASY E-VOTING PYQ (EDUCATIONAL DEMO)
 
 QUESTION SUMMARY (03-11-2025):
@@ -1429,3 +1495,159 @@ def compare_time(function,*args):
     start=time.perf_counter()
     result=function(*args)
     return result,time.perf_counter()-start
+
+
+
+# ============================================================================
+# COMPATIBILITY LAYER — SAME FILE WORKS WITH BOTH BANKING AND E-VOTING MOCKS
+# ============================================================================
+# Existing beginner projects used two call styles:
+#   key_for(128)                    OR key_for("AES",128)
+#   encrypt_data(data,key,"GCM")    OR encrypt_data(data,key,"AES","GCM")
+#   add_to_index(index,id,words,key) OR add_to_index(index,id,place,date,key)
+# These wrappers support BOTH styles without changing client.py/server.py.
+
+_original_key_for = key_for
+_original_encrypt_data = encrypt_data
+_original_decrypt_data = decrypt_data
+_original_add_to_index = add_to_index
+
+def key_for(algorithm="AES", bits=256):
+    """Generate AES/DES/3DES key. key_for(128) also means AES-128."""
+    if isinstance(algorithm, int):
+        bits = algorithm
+        algorithm = "AES"
+    return _original_key_for(algorithm, bits)
+
+
+def encrypt_data(data, key, algorithm="AES", mode="CBC"):
+    """Encrypt bytes. Third argument can be algorithm OR AES mode."""
+    if algorithm.upper() in ("ECB", "CBC", "CTR", "GCM"):
+        mode = algorithm
+        algorithm = "AES"
+    return _original_encrypt_data(data, key, algorithm, mode)
+
+
+def decrypt_data(packet, key, algorithm="AES"):
+    """Decrypt with packet's stored IV/nonce/mode, using same key."""
+    if algorithm.upper() in ("ECB", "CBC", "CTR", "GCM"):
+        algorithm = "AES"
+    return _original_decrypt_data(packet, key, algorithm)
+
+
+def elgamal_make_keys():
+    """Alias used by both mock clients."""
+    return elgamal_keys()
+
+
+def paillier_make_keys():
+    """Alias used by both mock servers."""
+    return paillier_keys()
+
+
+def add_to_index(index, record_id, keywords, secret_or_date, optional_secret=None):
+    """
+    Generic: add_to_index(index, record_id, ["branch:udupi"], secret)
+    Legacy:  add_to_index(index, record_id, "Udupi", "2026-10-23", secret)
+    """
+    if optional_secret is not None:
+        # Legacy e-voting format
+        return _original_add_to_index(
+            index, record_id, keywords, secret_or_date, optional_secret
+        )
+
+    # Generic banking format: list of searchable terms
+    secret = secret_or_date
+    if isinstance(keywords, str):
+        keywords = [keywords]
+
+    for keyword in keywords:
+        token = search_token(str(keyword), secret)
+        index.setdefault(token, []).append(record_id)
+
+
+def receive_exact(sock, size):
+    """Receive exactly size bytes from a TCP socket."""
+    data = b""
+    while len(data) < size:
+        piece = sock.recv(size - len(data))
+        if not piece:
+            raise ConnectionError("Socket closed before message completed")
+        data += piece
+    return data
+
+
+# ============================================================================
+# EXTRA GENERIC RECORD HELPERS — USE file.txt AND records[] EVERYWHERE
+# ============================================================================
+def read_records(filename="file.txt"):
+    """
+    Read nonempty CSV-like lines into a list of lists.
+    Example input line: 101,201,5000,Manipal,2026-10-23
+    Output row: ['101','201','5000','Manipal','2026-10-23']
+    """
+    records = []
+    for line in Path(filename).read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        record = [part.strip() for part in line.split(",")]
+        records.append(record)
+    return records
+
+
+def save_record(filename, record):
+    """Append one dictionary to a TXT file as JSON, one line per record."""
+    with Path(filename).open("a", encoding="utf-8") as output:
+        output.write(json.dumps(record, sort_keys=True, default=str) + "\n")
+
+
+def compare_hash_algorithms(data):
+    """Lab 5: compare digest lengths for same byte message."""
+    for algorithm in ("md5", "sha1", "sha256", "sha512"):
+        digest = hash_bytes(data, algorithm)
+        print(algorithm.upper(), ":", digest, "length:", len(digest))
+
+
+def compare_cipher_algorithms(data=b"HELLO"):
+    """Lab 2: demonstration/timing for AES/DES/3DES CBC."""
+    for algorithm, bits in (("AES", 128), ("AES", 192), ("AES", 256),
+                            ("DES", 0), ("3DES", 0)):
+        key = key_for(algorithm, bits)
+        start = time.perf_counter()
+        packet = encrypt_data(data, key, algorithm, "CBC")
+        recovered = decrypt_data(packet, key, algorithm)
+        seconds = time.perf_counter() - start
+        print(algorithm, bits, "OK:", recovered == data, "seconds:", seconds)
+
+
+def demo_universal():
+    """Run short tests: hash, AES-GCM, RSA, ECDSA, Paillier, search."""
+    data = b"HELLO"
+    key = key_for("AES", 128)
+    packet = encrypt_data(data, key, "AES", "GCM")
+    print("AES-GCM:", decrypt_data(packet, key, "AES"))
+
+    print("SHA-256:", hash_bytes(data, "sha256"))
+
+    rsa_pub, rsa_priv = rsa_make_keys(2048)
+    wrapped = rsa_encrypt(key, rsa_pub)
+    print("RSA key recovered:", rsa_decrypt(wrapped, rsa_priv) == key)
+
+    ecc_pub, ecc_priv = ecc_make_keys()
+    sig = ecc_sign(data, ecc_priv)
+    print("ECDSA verified:", ecc_verify(data, sig, ecc_pub))
+
+    pai_pub, pai_priv = paillier_make_keys()
+    c1 = paillier_encrypt(10, pai_pub)
+    c2 = paillier_encrypt(20, pai_pub)
+    combined = paillier_add([c1, c2], pai_pub)
+    print("Paillier 10+20:", paillier_decrypt(combined, pai_pub, pai_priv))
+
+    secret = get_random_bytes(32)
+    index = {}
+    add_to_index(index, 101, ["branch:udupi"], secret)
+    print("SSE Udupi IDs:", search_index(index, "branch:udupi", secret))
+
+
+if __name__ == "__main__":
+    demo_universal()

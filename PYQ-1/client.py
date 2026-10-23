@@ -1,218 +1,266 @@
 # ============================================================================
-# EXAM SWAP GUIDE — CLIENT.PY (COMMENTED EXAMPLES; NO EXECUTION)
+# BEGINNER EXAM CHANGE MAP — CLIENT.PY
 # ============================================================================
-# Existing PYQ remains SHA-512 + AES-256-CBC + RSA-4096 + ElGamal + Paillier.
-# To adapt a DIFFERENT question, import the helper you need and replace the
-# matching step. Do NOT enable all alternatives simultaneously.
+# SAME FUNCTION NAMES IN BOTH PROJECTS. ONLY CHANGE THE CODE INSIDE THEM.
 #
-# HASH SWAP:
-#   from crypto_helpers import hash_bytes
-#   digest = hash_bytes(data, 'sha256')   # or 'md5', 'sha1', 'sha512'
+# read_records():
+#   Always reads file.txt and returns records[] (list of dictionaries).
+#   BANK fields: id, receiver, amount, branch, date
+#   VOTE fields: id, candidate, constituency
+#   HOSPITAL example: id, name, department, diagnosis, expense
+#   Change field names and number of CSV columns ONLY HERE.
 #
-# SYMMETRIC CIPHER SWAP (packet format includes mode and IV/nonce):
-#   from crypto_helpers import key_for, encrypt_data
-#   key = key_for('AES', 128)              # 128 / 192 / 256
-#   packet = encrypt_data(data, key, 'AES', 'GCM')
-#   key = key_for('DES')                   # DES: 8-byte key
-#   packet = encrypt_data(data, key, 'DES', 'CBC')
-#   key = key_for('3DES')                  # Triple DES
-#   packet = encrypt_data(data, key, '3DES', 'CTR')
-#   # AES modes: ECB / CBC / CTR / GCM; DES/3DES: ECB / CBC / CTR.
-#   # ECB is insecure; CBC requires separate authentication.
+# get_setup():
+#   Asks server for PUBLIC RSA/Paillier keys and timestamp ticket.
+#   For RSA 2048 -> 4096 change RSA_BITS in SERVER.PY, not here.
 #
-# DIGITAL SIGNATURE SWAP:
-#   from crypto_helpers import rsa_make_keys, rsa_sign_bytes
-#   signer_pub, signer_priv = rsa_make_keys(2048)
-#   signature_hex = rsa_sign_bytes(data, signer_priv)   # RSA-PSS/SHA512
-#   from crypto_helpers import ecc_make_keys, ecc_sign
-#   ecc_pub, ecc_priv = ecc_make_keys()
-#   signature_hex = ecc_sign(data, ecc_priv)            # ECDSA/SHA256
-#   from crypto_helpers import schnorr_make_keys, schnorr_sign
-#   schnorr_pub, schnorr_priv = schnorr_make_keys()
-#   signature = schnorr_sign(data, schnorr_pub, schnorr_priv)  # toy Schnorr
+# get_signing_keys():
+#   ECDSA: ecc_make_keys(), ecc_sign(data, private)
+#   ElGamal: elgamal_make_keys(), elgamal_sign(data, public, private)
+#   RSA-PSS: rsa_make_keys(2048), rsa_sign_bytes(data, private)
+#   Schnorr: schnorr_make_keys(), schnorr_sign(data, public, private)
+#   NOTE: To switch to RSA-PSS/Schnorr, ALSO update serialization in
+#   prepare_packet() AND the matching verification in server.py.
 #
-# CLASSICAL CIPHER SWAP (Lab 1; text instead of bytes):
-#   from crypto_helpers import caesar_encrypt, affine_encrypt, vigenere_encrypt
-#   encrypted_text = caesar_encrypt('HELLO', 3)
-#   encrypted_text = affine_encrypt('HELLO', 5, 8)
-#   encrypted_text = vigenere_encrypt('HELLO', 'KEY')
+# prepare_packet(record):  THIS IS THE MOST IMPORTANT FUNCTION FOR EXAMS.
+#   STEP 1: record dictionary -> to_bytes(record)
+#   STEP 2: hash_bytes(data, HASH_NAME) -> md5/sha1/sha256/sha512
+#   STEP 3: key_for(AES_BITS) + encrypt_data(data, aes_key, AES_MODE)
+#           AES_BITS = 128/192/256, AES_MODE = ECB/CBC/CTR/GCM
+#           DES: key_for('DES'), encrypt_data(data,key,'DES','CBC')
+#           3DES: key_for('3DES'), encrypt_data(data,key,'3DES','CBC')
+#           If changing cipher, update SERVER's decrypt_data(..., 'DES').
+#   STEP 4: rsa_encrypt(aes_key, rsa_public) wraps short session key.
+#           For Diffie-Hellman, a DIFFERENT key-agreement protocol is needed.
+#   STEP 5: paillier_encrypt(number, pai_public)
+#           BANK -> amount; VOTE -> one-hot vector [1,0,0] etc.
+#   STEP 6: timestamp + hash + encrypted record + encrypted number(s)
+#   STEP 7: sign packet with chosen signature algorithm.
+#   WARNING: New signature algorithm must match SERVER verification.
 #
-# HOMOMORPHIC: Paillier encrypt integers; use one_hot_vote() for candidates.
-# FILE HASH: from crypto_helpers import write_hash_txt
-#            write_hash_txt('ballots.txt', 'hashes.txt', 'sha512')
+# ask_server(): TCP sends/receives JSON. Usually DO NOT change.
+# submit(): prepare_packet(record) -> send -> write client_report.txt.
+# tamper_demo(): modifies ciphertext AFTER signing; server rejects.
+# main(): Menu. Change labels and search prompts for your new scenario.
+#
+# IMPORTANT: NEVER blindly switch an algorithm only on one side.
+# Both client and server must agree on cipher, hash, signature, packet format.
 # ============================================================================
 
+"""CLIENT: Read file.txt, prepare protected records, send to server.
+
+MENU STEPS FOLLOW THE QUESTION. Run server.py FIRST in another terminal.
+Change only the LAB EXAM SETTINGS below to adapt the SAME flow.
 """
-CLIENT.PY - Voter's machine
-Run AFTER server.py: python client.py
-Menu follows PYQ client-side steps and then server-side results.
-Input is ballots.txt in SAME folder, e.g. 2,Udupi
-"""
-import json, socket
+import json
+import socket
 from pathlib import Path
-from Crypto.PublicKey import RSA
-from Crypto.Random import get_random_bytes
+from Crypto.PublicKey import RSA, ECC
 from crypto_helpers import (
-    to_bytes, sha512, aes_encrypt, rsa_encrypt,
-    elgamal_keys, elgamal_sign, paillier_encrypt,
-    send_json, recv_json
+    to_bytes, hash_bytes, key_for, encrypt_data, rsa_encrypt,
+    ecc_make_keys, ecc_sign, elgamal_make_keys, elgamal_sign,
+    paillier_encrypt, send_json, recv_json
 )
-BASE = Path(__file__).resolve().parent
-INPUT = BASE / "ballots.txt"
-REPORT = BASE / "client_report.txt"
-HOST, PORT = "127.0.0.1", 5055
-setup = None
-next_id = 1
 
+BASE = Path(__file__).resolve().parent
+INPUT = BASE / 'file.txt'                # ALWAYS the same generic filename
+REPORT = BASE / 'client_report.txt'
+HOST, PORT = '127.0.0.1', 5055
+
+# =====================================================================
+# EXAM SETTINGS: THIS IS THE MAIN PLACE TO SWAP ALGORITHMS.
+# BANK: sha256, 128, GCM, 2048, ECDSA, amount
+# VOTE: sha512, 256, CBC, 4096, ElGamal, one-hot
+# =====================================================================
+HASH_NAME = 'sha512'
+AES_BITS = 256
+AES_MODE = 'CBC'
+SIGN_NAME = 'ElGamal'
+SCENARIO = 'VOTE'
+
+setup = None
+sign_public = None
+sign_private = None
+
+# STEP 1: Read rows from file.txt into a GENERIC list called records.
+def read_records():
+    records = []
+
+    for line in INPUT.read_text(encoding='utf-8').splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):
+            continue
+
+        parts = [value.strip() for value in line.split(',')]
+
+        if SCENARIO == 'BANK':
+            # account, receiver, amount, branch, date
+            if len(parts) != 5:
+                raise ValueError('Bank row must have 5 comma-separated values')
+            record = {'id': parts[0], 'receiver': parts[1],
+                      'amount': int(parts[2]), 'branch': parts[3],
+                      'date': parts[4]}
+        else:
+            # ballot_id, candidate, constituency
+            if len(parts) != 3:
+                raise ValueError('Vote row must have 3 comma-separated values')
+            record = {'id': parts[0], 'candidate': int(parts[1]),
+                      'constituency': parts[2]}
+
+        records.append(record)
+
+    return records
+
+# STEP 2: Get server PUBLIC keys and simulated trusted timestamp.
+def get_setup():
+    global setup
+    setup = ask_server({'cmd': 'setup'})
+    if not setup.get('ok'):
+        raise ValueError(setup)
+    print('Public keys and timestamp received')
+
+# STEP 3: Generate ONE client signing identity (reuse for all records).
+# The demo server registers this public key on first use; REAL systems
+# require prior identity verification, not self-registration by packet.
+def get_signing_keys():
+    global sign_public, sign_private
+    if sign_private is None:
+        if SIGN_NAME == 'ECDSA':
+            sign_public, sign_private = ecc_make_keys()
+        else:
+            sign_public, sign_private = elgamal_make_keys()
+    return sign_public, sign_private
+
+# STEP 4: This is the ENTIRE reusable CLIENT crypto pipeline.
+def prepare_packet(record):
+    if setup is None:
+        get_setup()
+
+    print('\nSTEP 1 - Original record:', record)
+
+    # STEP 2: Convert record to bytes and calculate hash.
+    data = to_bytes(record)
+    digest = hash_bytes(data, HASH_NAME)
+    print('STEP 2 -', HASH_NAME, 'hash:', digest)
+
+    # STEP 3: Encrypt original record with AES.
+    aes_key = key_for(AES_BITS)
+    encrypted_record = encrypt_data(data, aes_key, AES_MODE)
+    print('STEP 3 - AES-', AES_BITS, AES_MODE, 'encrypted')
+
+    # STEP 4: RSA encrypt ONLY the small AES key, not whole record.
+    rsa_public = RSA.import_key(setup['rsa_public_pem'].encode())
+    encrypted_key = rsa_encrypt(aes_key, rsa_public)
+    print('STEP 4 - AES key protected using RSA public key')
+
+    # STEP 5: Encrypt numerical values with Paillier.
+    pai_public = tuple(setup['paillier_public'])
+    if SCENARIO == 'BANK':
+        encrypted_numbers = [paillier_encrypt(record['amount'], pai_public)]
+        print('STEP 5 - Encrypted amount:', record['amount'])
+    else:
+        # Candidate 1 -> [1,0,0], candidate 2 -> [0,1,0], etc.
+        candidate = record['candidate']
+        if candidate not in (1, 2, 3):
+            raise ValueError('Candidate must be 1, 2, or 3')
+        vector = [int(candidate == i) for i in (1, 2, 3)]
+        encrypted_numbers = [paillier_encrypt(v, pai_public) for v in vector]
+        print('STEP 5 - Encrypted one-hot vote:', vector)
+
+    # STEP 6: Attach timestamp, ciphertext, hash, and public signing key.
+    public, private = get_signing_keys()
+    if SIGN_NAME == 'ECDSA':
+        public_text = public.export_key(format='PEM')
+    else:
+        public_text = list(public)
+
+    packet = {
+        'record': encrypted_record,
+        'rsa_key': encrypted_key,
+        'hash': digest,
+        'numbers': encrypted_numbers,
+        'timestamp': setup['timestamp'],
+        'sign_public': public_text,
+        'id': record['id']
+    }
+
+    # STEP 7: Sign WHOLE packet except signature field itself.
+    if SIGN_NAME == 'ECDSA':
+        packet['signature'] = ecc_sign(to_bytes(packet), private)
+    else:
+        packet['signature'] = elgamal_sign(to_bytes(packet), public, private)
+    print('STEP 6-7 -', SIGN_NAME, 'signature + timestamp attached')
+
+    return packet
+
+# STEP 8: Actual socket client: send one request, read one response.
 def ask_server(request):
-    """Actual TCP client: send JSON request and read JSON response."""
-    with socket.create_connection((HOST, PORT), timeout=20) as conn:
+    with socket.create_connection((HOST, PORT), timeout=60) as conn:
         send_json(conn, request)
         return recv_json(conn)
 
-def read_ballots():
-    """STEP 1: Read .txt lines in 'candidate,Constituency' format."""
-    ballots = []
-    for line in INPUT.read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        candidate, place = line.split(",", 1)
-        candidate = int(candidate.strip())
-        if candidate not in (1, 2, 3):
-            raise ValueError("Candidate must be 1, 2, or 3")
-        ballots.append((candidate, place.strip()))
-    return ballots
-
-def get_setup():
-    """STEP 2: Obtain EC public keys + timestamp ticket from server."""
-    global setup
-    setup = ask_server({"cmd": "setup"})
-    print("EC public keys received. Deadline:", setup["deadline"])
-
-# ================================================================
-# CLIENT PYQ STEPS 1 TO 7: PREPARE ONE VOTER'S BALLOT
-# This function returns a dictionary (packet) for the server.
-# You can copy this whole function for similar hospital/bank PYQs.
-# ================================================================
-def prepare_packet(candidate, place, ballot_id):
-    """STEP 3: Build ballot -> SHA512 -> AES -> RSA -> Paillier -> ElGamal."""
-    if setup is None:
-        get_setup()
-    # STEP 1: Create a ballot (dictionary = data with named fields).
-    # The three values are read from ballots.txt by read_ballots().
-    ballot = {"id": ballot_id, "candidate": candidate, "constituency": place}
-
-    print("\nSTEP 1: Ballot created:", ballot)
-    # JSON is a way to turn the dictionary into text.
-    # .encode() inside to_bytes turns text into bytes for encryption.
-    data = to_bytes(ballot)
-    # STEP 2: Hash = fingerprint. NOT encryption, cannot be decrypted.
-    # SHA-512 gives a 128-character hexadecimal hash.
-    digest = sha512(data)
-    print("STEP 2: SHA-512 hash:", digest)
-    # STEP 3: Generate random secret key for AES.
-    # 256 bits / 8 = 32 bytes. For AES-128, use 16 bytes.
-    aes_key = get_random_bytes(32)
-    # AES-CBC encrypts the ballot; it also needs an IV (generated in helper).
-    encrypted_ballot = aes_encrypt(data, aes_key)
-    print("STEP 3: AES-CBC encrypted ballot:", encrypted_ballot)
-    rsa_pub = RSA.import_key(setup["rsa_public_pem"].encode())
-    # STEP 4: Encrypt the AES key with Election Commission PUBLIC RSA key.
-    # The server will recover it using its PRIVATE RSA key.
-    encrypted_key = rsa_encrypt(aes_key, rsa_pub)
-    print("STEP 4: RSA-encrypted AES key (first 60 chars):", encrypted_key[:60])
-    paillier_pub = tuple(setup["paillier_public"])
-    # STEP 5: One-hot vote representation.
-    # Candidate 1 -> [1,0,0]; candidate 2 -> [0,1,0]; candidate 3 -> [0,0,1].
-    one_hot = [0, 0, 0]
-    one_hot[candidate - 1] = 1
-    print("STEP 5: One-hot vote:", one_hot)
-    # Encrypt each number separately with Paillier public key.
-    encrypted_vote = []
-    for number in one_hot:
-        encrypted_number = paillier_encrypt(number, paillier_pub)
-        encrypted_vote.append(encrypted_number)
-    print("STEP 5: Paillier encrypted all three vote positions")
-    # Demo ElGamal keys, freshly generated for this ballot.
-    # STEP 6: ElGamal public/private signing keys (educational example).
-    sign_pub, sign_priv = elgamal_keys()
-    packet = {"ballot": encrypted_ballot, "rsa_key": encrypted_key,
-              "hash": digest, "vote": encrypted_vote,
-              "timestamp": setup["timestamp"],
-              "sign_public": list(sign_pub)}
-    # Sign all the packet fields (including ciphertext and timestamp).
-    # This detects tampering with the transmitted fields.
-    packet["signature"] = elgamal_sign(to_bytes(packet), sign_pub, sign_priv)
-    print("STEP 6: ElGamal signature created")
-    print("STEP 7: Server-issued timestamp attached:", setup["timestamp"]["time"])
-    return packet
-
-def submit(candidate, place):
-    """STEP 4: Send encrypted packet to Election Commission over TCP."""
-    global next_id
-    packet = prepare_packet(candidate, place, next_id)
-    # STEP 8: Send packet using a TCP socket to server.py.
-    response = ask_server({"cmd": "submit", "packet": packet})
-    with REPORT.open("a", encoding="utf-8") as f:
-        f.write(json.dumps({"ballot_id": next_id, "result": response}) + "\n")
-    print("Server reply:", response)
-    next_id += 1
+# STEP 9: Submit ONE record and save server reply in TXT.
+def submit(record):
+    packet = prepare_packet(record)
+    response = ask_server({'cmd': 'submit', 'packet': packet})
+    with REPORT.open('a', encoding='utf-8') as f:
+        f.write(json.dumps({'id': record['id'], 'result': response}) + '\n')
+    print('SERVER REPLY:', response)
     return response
 
+# STEP 10: Deliberately modify signed ciphertext. Must be rejected.
 def tamper_demo():
-    """STEP 7: Change ciphertext after signing; server must reject."""
-    global next_id
-    packet = prepare_packet(1, "Udupi", next_id)
-    original = packet["ballot"]["ct"]
-    packet["ballot"]["ct"] = ("00" if original[:2] != "00" else "ff") + original[2:]
-    print("Tampered server reply:",
-          ask_server({"cmd": "submit", "packet": packet}))
-    next_id += 1
+    record = read_records()[0]
+    packet = prepare_packet(record)
+    old = packet['record']['ct']
+    packet['record']['ct'] = ('00' if old[:2] != '00' else 'ff') + old[2:]
+    print('TAMPER TEST:', ask_server({'cmd': 'submit', 'packet': packet}))
 
+# MENU: one numbered option per task; identical for both projects.
 def main():
     while True:
         print("""
-======== E-VOTING PYQ: CLIENT MENU ========
-1. STEP 1 - Read ballots.txt (candidate, constituency)
-2. STEP 2 - Get RSA/Paillier public keys + trusted timestamp
-3. STEP 3-4 - Encrypt, hash, sign and SEND ONE ballot
-4. STEP 3-4 - Encrypt, hash, sign and SEND ALL TXT ballots
-5. STEP 5 - SERVER searchable index: search constituency
-6. STEP 6 - SERVER Paillier encrypted tally
-7. STEP 7 - SERVER audit log
-8. STEP 8 - Tampering test (must be rejected)
+========== E-VOTING PYQ CLIENT ==========
+1. STEP 1 - Read file.txt
+2. STEP 2 - Obtain server public keys and timestamp
+3. STEP 3 - Protect and SEND first record
+4. STEP 4 - Protect and SEND ALL records
+5. STEP 5 - Search by branch / constituency
+6. STEP 6 - Paillier encrypted aggregate
+7. STEP 7 - View audit log
+8. STEP 8 - Tamper test (must reject)
+9. STEP 9 - Role permission demonstration
 0. Exit
-==========================================
-""")
-        choice = input("Choose: ").strip()
+==========================================""")
+        choice = input('Choose: ').strip()
         try:
-            if choice == "1":
-                print("Input file:", INPUT)
-                for row in read_ballots(): print(row)
-            elif choice == "2":
+            if choice == '1':
+                for record in read_records():
+                    print(record)
+            elif choice == '2':
                 get_setup()
-            elif choice == "3":
-                c = int(input("Candidate 1/2/3: "))
-                place = input("Constituency: ")
-                submit(c, place)
-            elif choice == "4":
-                for c, place in read_ballots(): submit(c, place)
-            elif choice == "5":
-                place = input("Constituency to search: ")
-                print(ask_server({"cmd": "search", "place": place}))
-            elif choice == "6":
-                print(ask_server({"cmd": "tally"}))
-            elif choice == "7":
-                result = ask_server({"cmd": "audit"})
-                print("\n".join(result.get("lines", [])))
-            elif choice == "8":
+            elif choice == '3':
+                submit(read_records()[0])
+            elif choice == '4':
+                for record in read_records():
+                    submit(record)
+            elif choice == '5':
+                term = input('Branch or constituency: ').strip()
+                print(ask_server({'cmd': 'search', 'term': term, 'role': 'officer'}))
+            elif choice == '6':
+                print(ask_server({'cmd': 'tally', 'role': 'officer'}))
+            elif choice == '7':
+                print(ask_server({'cmd': 'audit', 'role': 'auditor'}))
+            elif choice == '8':
                 tamper_demo()
-            elif choice == "0":
+            elif choice == '9':
+                print('Guest search:', ask_server({'cmd': 'search', 'term': 'Manipal', 'role': 'guest'}))
+                print('Officer tally:', ask_server({'cmd': 'tally', 'role': 'officer'}))
+            elif choice == '0':
                 break
             else:
-                print("Invalid menu option")
-        except Exception as exc:
-            print("ERROR:", exc)
+                print('Invalid choice')
+        except Exception as error:
+            print('ERROR:', error)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

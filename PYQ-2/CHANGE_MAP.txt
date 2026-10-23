@@ -1,0 +1,87 @@
+# ============================================================================
+# BEGINNER EXAM CHANGE MAP — CLIENT.PY
+# ============================================================================
+# SAME FUNCTION NAMES IN BOTH PROJECTS. ONLY CHANGE THE CODE INSIDE THEM.
+#
+# read_records():
+#   Always reads file.txt and returns records[] (list of dictionaries).
+#   BANK fields: id, receiver, amount, branch, date
+#   VOTE fields: id, candidate, constituency
+#   HOSPITAL example: id, name, department, diagnosis, expense
+#   Change field names and number of CSV columns ONLY HERE.
+#
+# get_setup():
+#   Asks server for PUBLIC RSA/Paillier keys and timestamp ticket.
+#   For RSA 2048 -> 4096 change RSA_BITS in SERVER.PY, not here.
+#
+# get_signing_keys():
+#   ECDSA: ecc_make_keys(), ecc_sign(data, private)
+#   ElGamal: elgamal_make_keys(), elgamal_sign(data, public, private)
+#   RSA-PSS: rsa_make_keys(2048), rsa_sign_bytes(data, private)
+#   Schnorr: schnorr_make_keys(), schnorr_sign(data, public, private)
+#   NOTE: To switch to RSA-PSS/Schnorr, ALSO update serialization in
+#   prepare_packet() AND the matching verification in server.py.
+#
+# prepare_packet(record):  THIS IS THE MOST IMPORTANT FUNCTION FOR EXAMS.
+#   STEP 1: record dictionary -> to_bytes(record)
+#   STEP 2: hash_bytes(data, HASH_NAME) -> md5/sha1/sha256/sha512
+#   STEP 3: key_for(AES_BITS) + encrypt_data(data, aes_key, AES_MODE)
+#           AES_BITS = 128/192/256, AES_MODE = ECB/CBC/CTR/GCM
+#           DES: key_for('DES'), encrypt_data(data,key,'DES','CBC')
+#           3DES: key_for('3DES'), encrypt_data(data,key,'3DES','CBC')
+#           If changing cipher, update SERVER's decrypt_data(..., 'DES').
+#   STEP 4: rsa_encrypt(aes_key, rsa_public) wraps short session key.
+#           For Diffie-Hellman, a DIFFERENT key-agreement protocol is needed.
+#   STEP 5: paillier_encrypt(number, pai_public)
+#           BANK -> amount; VOTE -> one-hot vector [1,0,0] etc.
+#   STEP 6: timestamp + hash + encrypted record + encrypted number(s)
+#   STEP 7: sign packet with chosen signature algorithm.
+#   WARNING: New signature algorithm must match SERVER verification.
+#
+# ask_server(): TCP sends/receives JSON. Usually DO NOT change.
+# submit(): prepare_packet(record) -> send -> write client_report.txt.
+# tamper_demo(): modifies ciphertext AFTER signing; server rejects.
+# main(): Menu. Change labels and search prompts for your new scenario.
+#
+# IMPORTANT: NEVER blindly switch an algorithm only on one side.
+# Both client and server must agree on cipher, hash, signature, packet format.
+# ============================================================================
+
+
+# ============================================================================
+# BEGINNER EXAM CHANGE MAP — SERVER.PY
+# ============================================================================
+# SAME FUNCTION NAMES IN BOTH PROJECTS.
+#
+# SERVER SETTINGS (just below imports):
+#   HASH_NAME must equal client's HASH_NAME.
+#   SIGN_NAME must equal client's SIGN_NAME.
+#   RSA_BITS=2048 for BANK or 4096 for VOTE.
+#   SCENARIO controls validation and searchable keyword labels.
+#
+# accept_record(packet): REVERSE THE CLIENT OPERATIONS
+#   STEP 1: verify signature using a TRUSTED public key (demo uses packet key).
+#           ECDSA -> ecc_verify(data, signature, public)
+#           ElGamal -> elgamal_verify(data, signature, public)
+#           RSA-PSS -> rsa_verify_bytes(data, signature, public)
+#           Schnorr -> schnorr_verify(data, signature, public)
+#   STEP 2: check_timestamp(ticket, secret, deadline)
+#   STEP 3: rsa_decrypt(packet['rsa_key'], rsa_private) -> session key
+#   STEP 4: decrypt_data(packet['record'], key) -> plaintext bytes
+#           For DES/3DES: decrypt_data(packet['record'],key,'DES'/'3DES')
+#           AES CBC/CTR/GCM are determined from packet metadata.
+#   STEP 5: hash_bytes(data, HASH_NAME) == packet['hash']
+#   STEP 6: json.loads(data), check fields, append encrypted packet to TXT
+#   STEP 7: add_to_index(index, record_id, keywords, search_secret)
+#
+# tally(): Paillier-add encrypted numbers; decrypt only aggregated total.
+#   BANK -> 1 encrypted amount per record.
+#   VOTE -> 3 encrypted one-hot values per record.
+#   NEW TASK -> change which encrypted columns are aggregated.
+#
+# handle(): map menu commands to setup / submit / search / tally / audit.
+# main(): start socket server. Usually DO NOT change.
+#
+# LIMITATIONS: roles are client-claimed (NOT authenticated); signature public
+# keys are not preregistered; no TLS; no threshold Paillier or secure voting.
+# ============================================================================

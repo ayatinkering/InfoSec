@@ -1,0 +1,5 @@
+1,1,Manipal
+2,2,Udupi
+3,2,Manipal
+4,3,Mangalore
+5,1,Udupi
